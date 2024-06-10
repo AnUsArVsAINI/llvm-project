@@ -3097,7 +3097,7 @@ uint16_t ASTContext::getPointerAuthVTablePointerDiscriminator(
   SmallString<256> Str;
   llvm::raw_svector_ostream Out(Str);
   MC->mangleCXXVTable(record, Out);
-  return llvm::getPointerAuthStableSipHash16(Str.c_str());
+  return llvm::getPointerAuthStableSipHash16(Str.str());
 }
 
 QualType ASTContext::getObjCGCQualType(QualType T,
