@@ -616,7 +616,7 @@ private:
   llvm::DenseMap<const CXXRecordDecl *, std::optional<PointerAuthQualifier>>
       VTablePtrAuthInfos;
   std::optional<PointerAuthQualifier>
-  computeVTPointerAuthentication(const CXXRecordDecl *thisClass);
+  computeVTPointerAuthentication(const CXXRecordDecl *ThisClass);
 
 public:
   CodeGenModule(ASTContext &C, IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
@@ -983,13 +983,13 @@ public:
                                            llvm::Constant *extraDiscrim);
 
   llvm::Constant *
-  getPointerAuthOtherDiscriminator(const PointerAuthSchema &schema,
-                                   GlobalDecl schemaDecl, QualType schemaType);
+  getPointerAuthOtherDiscriminator(const PointerAuthSchema &Schema,
+                                   GlobalDecl SchemaDecl, QualType SchemaType);
   uint16_t getPointerAuthDeclDiscriminator(GlobalDecl GD);
   std::optional<CGPointerAuthInfo>
-  getVTablePointerAuthInfo(CodeGenFunction *context,
-                           const CXXRecordDecl *record,
-                           llvm::Value *storageAddress);
+  getVTablePointerAuthInfo(CodeGenFunction *Context,
+                           const CXXRecordDecl *Record,
+                           llvm::Value *StorageAddress);
 
   std::optional<PointerAuthQualifier>
   getVTablePointerAuthentication(const CXXRecordDecl *thisClass);
