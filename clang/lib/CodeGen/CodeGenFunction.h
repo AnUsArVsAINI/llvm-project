@@ -4430,8 +4430,8 @@ public:
   llvm::Value *EmitPointerAuthAuth(const CGPointerAuthInfo &Info,
                                    llvm::Value *Pointer);
   void EmitPointerAuthOperandBundle(
-      const CGPointerAuthInfo &info,
-      SmallVectorImpl<llvm::OperandBundleDef> &bundles);
+      const CGPointerAuthInfo &Info,
+      SmallVectorImpl<llvm::OperandBundleDef> &Bundles);
 
   // Return the copy constructor name with the prefix "__copy_constructor_"
   // removed.

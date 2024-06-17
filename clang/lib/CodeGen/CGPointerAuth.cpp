@@ -11,20 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CGCXXABI.h"
-#include "CGCall.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
-#include "clang/AST/Attr.h"
-#include "clang/Basic/PointerAuthOptions.h"
 #include "clang/CodeGen/CodeGenABITypes.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
-
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/IR/ValueMap.h"
-#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Support/SipHash.h"
-#include <vector>
 
 using namespace clang;
 using namespace CodeGen;
@@ -73,7 +64,7 @@ CodeGenModule::getPointerAuthDeclDiscriminator(GlobalDecl Declaration) {
 /// Return the abstract pointer authentication schema for a pointer to the given
 /// function type.
 CGPointerAuthInfo CodeGenModule::getFunctionPointerAuthInfo(QualType T) {
-  auto &Schema = getCodeGenOpts().PointerAuth.FunctionPointers;
+  const auto &Schema = getCodeGenOpts().PointerAuth.FunctionPointers;
   if (!Schema)
     return CGPointerAuthInfo();
 
@@ -125,41 +116,39 @@ CGPointerAuthInfo CodeGenFunction::EmitPointerAuthInfo(
 
 /// Build a signed-pointer "ptrauth" constant.
 static llvm::ConstantPtrAuth *
-buildConstantAddress(CodeGenModule &CGM, llvm::Constant *pointer, unsigned key,
-                     llvm::Constant *storageAddress,
-                     llvm::Constant *otherDiscriminator) {
-  llvm::Constant *addressDiscriminator = nullptr;
-  if (storageAddress) {
-    addressDiscriminator = storageAddress;
-    assert(storageAddress->getType() == CGM.UnqualPtrTy);
+buildConstantAddress(CodeGenModule &CGM, llvm::Constant *Pointer, unsigned Key,
+                     llvm::Constant *StorageAddress,
+                     llvm::Constant *OtherDiscriminator) {
+  llvm::Constant *AddressDiscriminator = nullptr;
+  if (StorageAddress) {
+    AddressDiscriminator = StorageAddress;
+    assert(StorageAddress->getType() == CGM.UnqualPtrTy);
   } else {
-    addressDiscriminator = llvm::Constant::getNullValue(CGM.UnqualPtrTy);
+    AddressDiscriminator = llvm::Constant::getNullValue(CGM.UnqualPtrTy);
   }
 
-  llvm::ConstantInt *integerDiscriminator = nullptr;
-  if (otherDiscriminator) {
-    assert(otherDiscriminator->getType() == CGM.Int64Ty);
-    integerDiscriminator = cast<llvm::ConstantInt>(otherDiscriminator);
+  llvm::ConstantInt *IntegerDiscriminator = nullptr;
+  if (OtherDiscriminator) {
+    assert(OtherDiscriminator->getType() == CGM.Int64Ty);
+    IntegerDiscriminator = cast<llvm::ConstantInt>(OtherDiscriminator);
   } else {
-    integerDiscriminator = llvm::ConstantInt::get(CGM.Int64Ty, 0);
+    IntegerDiscriminator = llvm::ConstantInt::get(CGM.Int64Ty, 0);
   }
 
-  return llvm::ConstantPtrAuth::get(
-    pointer, llvm::ConstantInt::get(CGM.Int32Ty, key), integerDiscriminator,
-    addressDiscriminator);
+  return llvm::ConstantPtrAuth::get(Pointer,
+                                    llvm::ConstantInt::get(CGM.Int32Ty, Key),
+                                    IntegerDiscriminator, AddressDiscriminator);
 }
 
 llvm::Constant *
-CodeGenModule::getConstantSignedPointer(llvm::Constant *pointer,
-                                        unsigned key,
-                                        llvm::Constant *storageAddress,
-                                        llvm::Constant *otherDiscriminator) {
-  // Unique based on the underlying value, not a signing of it.
-  auto stripped = pointer->stripPointerCasts();
+CodeGenModule::getConstantSignedPointer(llvm::Constant *Pointer, unsigned Key,
+                                        llvm::Constant *StorageAddress,
+                                        llvm::Constant *OtherDiscriminator) {
+  llvm::Constant *Stripped = Pointer->stripPointerCasts();
 
   // Build the constant.
-  return buildConstantAddress(*this, stripped, key, storageAddress,
-                              otherDiscriminator);
+  return buildConstantAddress(*this, Stripped, Key, StorageAddress,
+                              OtherDiscriminator);
 }
 
 /// Does a given PointerAuthScheme require us to sign a value
@@ -184,12 +173,11 @@ llvm::Constant *CodeGenModule::getConstantSignedPointer(
 }
 
 llvm::Constant *
-CodeGen::getConstantSignedPointer(CodeGenModule &CGM,
-                                  llvm::Constant *pointer, unsigned key,
-                                  llvm::Constant *storageAddress,
-                                  llvm::Constant *otherDiscriminator) {
-  return CGM.getConstantSignedPointer(pointer, key, storageAddress,
-                                      otherDiscriminator);
+CodeGen::getConstantSignedPointer(CodeGenModule &CGM, llvm::Constant *Pointer,
+                                  unsigned Key, llvm::Constant *StorageAddress,
+                                  llvm::Constant *OtherDiscriminator) {
+  return CGM.getConstantSignedPointer(Pointer, Key, StorageAddress,
+                                      OtherDiscriminator);
 }
 
 /// Sign the given pointer and add it to the constant initializer
@@ -225,34 +213,26 @@ void ConstantAggregateBuilderBase::addSignedPointer(
 
 /// If applicable, sign a given constant function pointer with the ABI rules for
 /// functionType.
-llvm::Constant *CodeGenModule::getFunctionPointer(llvm::Constant *pointer,
-                                                  QualType functionType,
+llvm::Constant *CodeGenModule::getFunctionPointer(llvm::Constant *Pointer,
+                                                  QualType FunctionType,
                                                   GlobalDecl GD) {
-  assert(functionType->isFunctionType() ||
-         functionType->isFunctionReferenceType() ||
-         functionType->isFunctionPointerType());
+  assert(FunctionType->isFunctionType() ||
+         FunctionType->isFunctionReferenceType() ||
+         FunctionType->isFunctionPointerType());
 
-  if (auto pointerAuth = getFunctionPointerAuthInfo(functionType)) {
+  if (auto PointerAuth = getFunctionPointerAuthInfo(FunctionType)) {
     return getConstantSignedPointer(
-      pointer, pointerAuth.getKey(), nullptr,
-      cast_or_null<llvm::Constant>(pointerAuth.getDiscriminator()));
+      Pointer, PointerAuth.getKey(), nullptr,
+      cast_or_null<llvm::Constant>(PointerAuth.getDiscriminator()));
   }
 
-  return pointer;
+  return Pointer;
 }
 
 llvm::Constant *CodeGenModule::getFunctionPointer(GlobalDecl GD,
                                                   llvm::Type *Ty) {
-  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
-
-  // Annoyingly, K&R functions have prototypes in the clang AST, but
-  // expressions referring to them are unprototyped.
+  const auto *FD = cast<FunctionDecl>(GD.getDecl());
   QualType FuncType = FD->getType();
-  if (!FD->hasPrototype())
-    if (const auto *Proto = FuncType->getAs<FunctionProtoType>())
-      FuncType = Context.getFunctionNoProtoType(Proto->getReturnType(),
-                                                Proto->getExtInfo());
-
   return getFunctionPointer(getRawFunctionPointer(GD, Ty), FuncType, GD);
 }
 

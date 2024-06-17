@@ -14,6 +14,7 @@
 #define LLVM_CLANG_LIB_CODEGEN_CGPOINTERAUTHINFO_H
 
 #include "clang/AST/Type.h"
+#include "clang/Basic/LangOptions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 
@@ -23,9 +24,9 @@ namespace CodeGen {
 class CGPointerAuthInfo {
 private:
   PointerAuthenticationMode AuthenticationMode : 2;
-  bool IsIsaPointer : 1;
-  bool AuthenticatesNullValues : 1;
-  unsigned Key : 28;
+  unsigned IsIsaPointer : 1;
+  unsigned AuthenticatesNullValues : 1;
+  unsigned Key : 4;
   llvm::Value *Discriminator;
 
 public:
@@ -80,13 +81,15 @@ public:
     return AuthenticationMode == PointerAuthenticationMode::SignAndAuth;
   }
 
-  bool operator!=(const CGPointerAuthInfo &Other) const {
-    return Key != Other.Key || Discriminator != Other.Discriminator ||
-           AuthenticationMode != Other.AuthenticationMode;
+  friend bool operator!=(const CGPointerAuthInfo &LHS,
+                         const CGPointerAuthInfo &RHS) {
+    return LHS.Key != RHS.Key || LHS.Discriminator != RHS.Discriminator ||
+           LHS.AuthenticationMode != RHS.AuthenticationMode;
   }
 
-  bool operator==(const CGPointerAuthInfo &Other) const {
-    return !(*this != Other);
+  friend bool operator==(const CGPointerAuthInfo &LHS,
+                         const CGPointerAuthInfo &RHS) {
+    return !(LHS != RHS);
   }
 };
 
